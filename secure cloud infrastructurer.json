@@ -1,0 +1,706 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "Secure Scalable Cloud Infrastructure Using AWS - Part 1 Network Layer",
+
+  "Parameters": {
+
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    },
+
+    "PublicSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+
+    "PublicSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24"
+    },
+
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24"
+    },
+
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.4.0/24"
+    }
+  },
+
+
+  "Resources": {
+
+    "SecureVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Secure-Cloud-VPC"
+          }
+        ]
+      }
+    },
+
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Secure-Internet-Gateway"
+          }
+        ]
+      }
+    },
+
+
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+
+
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1CIDR"
+        },
+        "AvailabilityZone": "ap-south-2a",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public-Subnet-1"
+          }
+        ]
+      }
+    },
+
+
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2CIDR"
+        },
+        "AvailabilityZone": "ap-south-2b",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public-Subnet-2"
+          }
+        ]
+      }
+    },
+
+
+"EC2SecurityGroup": {
+  "Type": "AWS::EC2::SecurityGroup",
+  "Properties": {
+    "GroupDescription": "Allow SSH and HTTP access",
+    "VpcId": {
+      "Ref": "SecureVPC"
+    },
+    "SecurityGroupIngress": [
+      {
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "CidrIp": "0.0.0.0/0"
+      },
+      {
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "CidrIp": "0.0.0.0/0"
+      }
+    ]
+  }
+},
+
+
+"LoadBalancerSecurityGroup": {
+  "Type": "AWS::EC2::SecurityGroup",
+  "Properties": {
+    "GroupDescription": "Allow HTTP traffic to Load Balancer",
+    "VpcId": {
+      "Ref": "SecureVPC"
+    },
+    "SecurityGroupIngress": [
+      {
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "CidrIp": "0.0.0.0/0"
+      }
+    ]
+  }
+},
+
+
+"RDSSecurityGroup": {
+  "Type": "AWS::EC2::SecurityGroup",
+  "Properties": {
+    "GroupDescription": "Allow MySQL access from EC2",
+    "VpcId": {
+      "Ref": "SecureVPC"
+    },
+    "SecurityGroupIngress": [
+      {
+        "IpProtocol": "tcp",
+        "FromPort": 3306,
+        "ToPort": 3306,
+        "SourceSecurityGroupId": {
+          "Ref": "EC2SecurityGroup"
+        }
+      }
+    ]
+  }
+},
+
+
+"EC2InstanceRole": {
+  "Type": "AWS::IAM::Role",
+  "Properties": {
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": [
+              "ec2.amazonaws.com"
+            ]
+          },
+          "Action": [
+            "sts:AssumeRole"
+          ]
+        }
+      ]
+    },
+    "ManagedPolicyArns": [
+      "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+    ]
+  }
+},
+
+
+"EC2InstanceProfile": {
+  "Type": "AWS::IAM::InstanceProfile",
+  "Properties": {
+    "Roles": [
+      {
+        "Ref": "EC2InstanceRole"
+      }
+    ]
+  }
+},
+
+
+"ApplicationLaunchTemplate": {
+  "Type": "AWS::EC2::LaunchTemplate",
+  "Properties": {
+    "LaunchTemplateName": "Secure-Application-LaunchTemplate",
+
+    "LaunchTemplateData": {
+
+      "InstanceType": "t3.micro",
+
+      "ImageId": "ami-01f3f4b95d125a9af",
+
+      "SecurityGroupIds": [
+        {
+          "Ref": "EC2SecurityGroup"
+        }
+      ],
+
+      "IamInstanceProfile": {
+        "Name": {
+          "Ref": "EC2InstanceProfile"
+        }
+      },
+
+      "UserData": {
+        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install httpd -y\nsystemctl start httpd\nsystemctl enable httpd\necho 'Secure AWS Cloud Infrastructure Project' > /var/www/html/index.html"
+      }
+
+    }
+  }
+}
+,
+
+"ApplicationLoadBalancer": {
+  "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+  "Properties": {
+    "Name": "Secure-Application-ALB",
+    "Scheme": "internet-facing",
+    "Type": "application",
+
+    "Subnets": [
+      {
+        "Ref": "PublicSubnet1"
+      },
+      {
+        "Ref": "PublicSubnet2"
+      }
+    ],
+
+    "SecurityGroups": [
+      {
+        "Ref": "LoadBalancerSecurityGroup"
+      }
+    ]
+  }
+},
+
+
+"ApplicationTargetGroup": {
+  "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+  "Properties": {
+
+    "Name": "Secure-Target-Group",
+
+    "Port": 80,
+
+    "Protocol": "HTTP",
+
+    "VpcId": {
+      "Ref": "SecureVPC"
+    },
+
+    "TargetType": "instance",
+
+    "HealthCheckEnabled": true,
+
+    "HealthCheckPath": "/"
+  }
+},
+
+
+"ApplicationListener": {
+  "Type": "AWS::ElasticLoadBalancingV2::Listener",
+
+  "Properties": {
+
+    "LoadBalancerArn": {
+      "Ref": "ApplicationLoadBalancer"
+    },
+
+    "Port": 80,
+
+    "Protocol": "HTTP",
+
+    "DefaultActions": [
+      {
+        "Type": "forward",
+
+        "TargetGroupArn": {
+          "Ref": "ApplicationTargetGroup"
+        }
+      }
+    ]
+  }
+},
+
+
+"ApplicationAutoScalingGroup": {
+
+  "Type": "AWS::AutoScaling::AutoScalingGroup",
+
+  "Properties": {
+
+    "VPCZoneIdentifier": [
+      {
+        "Ref": "PublicSubnet1"
+      },
+      {
+        "Ref": "PublicSubnet2"
+      }
+    ],
+
+    "LaunchTemplate": {
+
+      "LaunchTemplateId": {
+        "Ref": "ApplicationLaunchTemplate"
+      },
+
+      "Version": {
+        "Fn::GetAtt": [
+          "ApplicationLaunchTemplate",
+          "LatestVersionNumber"
+        ]
+      }
+    },
+
+
+    "MinSize": "1",
+
+    "DesiredCapacity": "1",
+
+    "MaxSize": "2",
+
+
+    "TargetGroupARNs": [
+
+      {
+        "Ref": "ApplicationTargetGroup"
+      }
+
+    ],
+
+
+    "Tags": [
+      {
+        "Key": "Name",
+
+        "Value": "AutoScaling-EC2",
+
+        "PropagateAtLaunch": true
+      }
+    ]
+  },
+
+
+  "DependsOn": [
+    "ApplicationListener"
+  ]
+}
+,
+
+"DatabaseSubnetGroup": {
+  "Type": "AWS::RDS::DBSubnetGroup",
+  "Properties": {
+
+    "DBSubnetGroupDescription": "Private subnet group for RDS",
+
+    "SubnetIds": [
+      {
+        "Ref": "PrivateSubnet1"
+      },
+      {
+        "Ref": "PrivateSubnet2"
+      }
+    ],
+
+    "DBSubnetGroupName": "secure-rds-subnet-group"
+  }
+},
+
+
+"MySQLDatabase": {
+  "Type": "AWS::RDS::DBInstance",
+  "Properties": {
+
+    "DBInstanceIdentifier": "secure-cloud-database",
+
+    "DBInstanceClass": "db.t3.micro",
+
+    "Engine": "mysql",
+
+    "EngineVersion": "8.0",
+
+    "AllocatedStorage": "20",
+
+    "StorageType": "gp2",
+
+
+    "MasterUsername": "admin",
+
+    "MasterUserPassword": "SecurePassword123!",
+
+
+    "DBSubnetGroupName": {
+      "Ref": "DatabaseSubnetGroup"
+    },
+
+
+    "VPCSecurityGroups": [
+      {
+        "Ref": "RDSSecurityGroup"
+      }
+    ],
+
+
+    "PubliclyAccessible": false,
+
+
+    "BackupRetentionPeriod": 7,
+
+
+    "MultiAZ": false,
+
+
+    "DeletionProtection": false
+
+  }
+}
+,
+
+"BackupS3Bucket": {
+  "Type": "AWS::S3::Bucket",
+  "Properties": {
+
+    "BucketName": "secure-cloud-project-backup",
+
+    "VersioningConfiguration": {
+      "Status": "Enabled"
+    },
+
+    "BucketEncryption": {
+      "ServerSideEncryptionConfiguration": [
+        {
+          "ServerSideEncryptionByDefault": {
+            "SSEAlgorithm": "AES256"
+          }
+        }
+      ]
+    }
+  }
+},
+
+
+"EC2CPUAlarm": {
+  "Type": "AWS::CloudWatch::Alarm",
+  "Properties": {
+
+    "AlarmName": "EC2-High-CPU-Alarm",
+
+    "AlarmDescription": "Alarm when EC2 CPU usage is high",
+
+    "MetricName": "CPUUtilization",
+
+    "Namespace": "AWS/EC2",
+
+    "Statistic": "Average",
+
+    "Period": 300,
+
+    "EvaluationPeriods": 1,
+
+    "Threshold": 80,
+
+    "ComparisonOperator": "GreaterThanThreshold",
+
+    "Dimensions": [
+      {
+        "Name": "AutoScalingGroupName",
+
+        "Value": {
+          "Ref": "ApplicationAutoScalingGroup"
+        }
+      }
+    ]
+  }
+},
+
+
+"CloudTrailBucket": {
+  "Type": "AWS::S3::Bucket",
+  "Properties": {
+
+    "BucketName": "secure-cloudtrail-logs-storage",
+
+    "VersioningConfiguration": {
+      "Status": "Enabled"
+    }
+  }
+},
+
+
+"CloudTrail": {
+  "Type": "AWS::CloudTrail::Trail",
+  "Properties": {
+
+    "TrailName": "Secure-Cloud-Audit-Trail",
+
+    "S3BucketName": {
+      "Ref": "CloudTrailBucket"
+    },
+
+    "IncludeGlobalServiceEvents": true,
+
+    "IsLogging": true
+  }
+},
+
+
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1CIDR"
+        },
+        "AvailabilityZone": "ap-south-2a",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private-Subnet-1"
+          }
+        ]
+      }
+    },
+
+
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": "ap-south-2b",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private-Subnet-2"
+          }
+        ]
+      }
+    },
+
+
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public-Route-Table"
+          }
+        ]
+      }
+    },
+
+
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+
+
+    "PublicSubnet1RouteAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+
+
+    "PublicSubnet2RouteAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    }
+
+  }
+},
+
+"Outputs": {
+
+  "LoadBalancerURL": {
+    "Description": "Application Load Balancer URL",
+
+    "Value": {
+      "Fn::Join": [
+        "",
+        [
+          "http://",
+          {
+            "Fn::GetAtt": [
+              "ApplicationLoadBalancer",
+              "DNSName"
+            ]
+          }
+        ]
+      ]
+    }
+  },
+
+
+  "RDSEndpoint": {
+    "Description": "RDS Database Endpoint",
+
+    "Value": {
+      "Fn::GetAtt": [
+        "MySQLDatabase",
+        "Endpoint.Address"
+      ]
+    }
+  },
+
+
+  "S3BucketName": {
+    "Description": "Backup S3 Bucket Name",
+
+    "Value": {
+      "Ref": "BackupS3Bucket"
+    }
+  },
+
+
+  "VPCID": {
+    "Description": "Created VPC ID",
+
+    "Value": {
+      "Ref": "SecureVPC"
+    }
+  }
+
+}
+
+}
