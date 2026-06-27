@@ -18,18 +18,43 @@ This project creates a secure and scalable cloud infrastructure using AWS CloudF
 - AWS CloudFormation
 
 ## Architecture
-User
-  |
-Application Load Balancer
-  |
-EC2 Auto Scaling Group
-  |
-RDS MySQL Database
+Employee Users
+                          |
+                          |
+                    Internet Gateway
+                          |
+                          |
+              Application Load Balancer
+                    (Public Subnet)
+                          |
+          --------------------------------
+          |                              |
+          |                              |
+     EC2 Instance 1                EC2 Instance 2
+   (Application Server)        (Auto Scaling Server)
+          |
+          |
+     Employee Management
+        Application
+          |
+          |
+     Private Subnet
+          |
+          |
+       RDS MySQL
+    (Employee Database)
 
-Additional Services:
-- S3 for backup storage
-- CloudWatch for monitoring
-- CloudTrail for auditing
+
+          |
+          |
+       Amazon S3
+(Employee Documents & Backup)
+
+
+          |
+          |
+ CloudWatch + CloudTrail
+(Monitoring & Security Audit)
 
 ## Purpose
 The purpose of this project is to design a secure, highly available, and scalable …
